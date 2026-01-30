@@ -4,10 +4,9 @@ import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
-  CheckSquare,
   Activity,
-  Instagram,
-  Calendar,
+  Radio,
+  Plug,
   Settings,
   Menu,
   X,
@@ -16,11 +15,10 @@ import {
 
 const navItems = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-  { id: 'tasks', label: 'Tarefas', icon: CheckSquare },
   { id: 'activity', label: 'Atividade', icon: Activity },
-  { id: 'instagram', label: 'Instagram', icon: Instagram },
-  { id: 'calendar', label: 'Calendário', icon: Calendar },
-  { id: 'settings', label: 'Config', icon: Settings },
+  { id: 'groups', label: 'Grupos & Canais', icon: Radio },
+  { id: 'integrations', label: 'Integrações', icon: Plug },
+  { id: 'settings', label: 'Configurações', icon: Settings },
 ];
 
 interface SidebarProps {
@@ -66,7 +64,7 @@ export default function Sidebar({ activeTab, onTabChange }: SidebarProps) {
           {!collapsed && (
             <div>
               <h1 className="font-bold text-sm">Kelvin Dashboard</h1>
-              <p className="text-xs text-gray-500">CB & RPK</p>
+              <p className="text-xs text-gray-500">Bot Activity Center</p>
             </div>
           )}
         </div>

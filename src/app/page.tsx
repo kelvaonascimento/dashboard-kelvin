@@ -5,46 +5,42 @@ import Sidebar from '@/components/Sidebar';
 import MetricCard from '@/components/MetricCard';
 import ActivityFeed, { ActivityItem } from '@/components/ActivityFeed';
 import ActivityChart from '@/components/ActivityChart';
-import TaskList from '@/components/TaskList';
 import BotStatus from '@/components/BotStatus';
 import LoginScreen from '@/components/LoginScreen';
 import DarkModeToggle from '@/components/DarkModeToggle';
+import GroupsPanel from '@/components/GroupsPanel';
+import IntegrationsPanel from '@/components/IntegrationsPanel';
 import { cn } from '@/lib/utils';
 import {
-  CheckSquare,
-  AlertTriangle,
+  Radio,
   MessageSquare,
-  Calendar,
+  Zap,
+  DollarSign,
   RefreshCw,
-  Instagram,
 } from 'lucide-react';
 
 interface DashboardData {
-  cbTasks: any[];
-  rpkTasks: any[];
-  cbOverdue: number;
-  rpkOverdue: number;
   activities: ActivityItem[];
+  stats: {
+    messages24h: number;
+    actions24h: number;
+    totalActivities: number;
+    dailyChart: any[];
+  };
 }
-
-const mockActivities: ActivityItem[] = [
-  { id: 1, timestamp: new Date(Date.now() - 300000).toISOString(), type: 'task_check', source: 'bot', title: 'Verificação de tarefas ClickUp', description: 'CB: 5 abertas, RPK: 3 abertas' },
-  { id: 2, timestamp: new Date(Date.now() - 900000).toISOString(), type: 'message_sent', source: 'whatsapp', title: 'Relatório diário enviado', description: 'Via WhatsApp para Kelvin' },
-  { id: 3, timestamp: new Date(Date.now() - 1800000).toISOString(), type: 'post_created', source: 'instagram', title: 'Post agendado no Instagram', description: 'Cultura Builder - carrossel' },
-  { id: 4, timestamp: new Date(Date.now() - 3600000).toISOString(), type: 'calendar_event', source: 'calendar', title: 'Reunião de planejamento', description: 'Google Meet às 14:00' },
-  { id: 5, timestamp: new Date(Date.now() - 7200000).toISOString(), type: 'bot_action', source: 'bot', title: 'Bot reiniciado', description: 'Atualização automática concluída' },
-];
 
 export default function Dashboard() {
   const [authenticated, setAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DashboardData>({
-    cbTasks: [],
-    rpkTasks: [],
-    cbOverdue: 0,
-    rpkOverdue: 0,
-    activities: mockActivities,
+    activities: [],
+    stats: {
+      messages24h: 0,
+      actions24h: 0,
+      totalActivities: 0,
+      dailyChart: [],
+    },
   });
 
   useEffect(() => {
@@ -61,22 +57,22 @@ export default function Dashboard() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [cbRes, rpkRes, actRes] = await Promise.allSettled([
-        fetch('/api/clickup?workspace=cb'),
-        fetch('/api/clickup?workspace=rpk'),
-        fetch('/api/activities'),
+      const [actRes, statsRes] = await Promise.allSettled([
+        fetch('/api/activities?limit=50'),
+        fetch('/api/activities/stats'),
       ]);
 
-      const cbData = cbRes.status === 'fulfilled' && cbRes.value.ok ? await cbRes.value.json() : { tasks: [], overdue: 0 };
-      const rpkData = rpkRes.status === 'fulfilled' && rpkRes.value.ok ? await rpkRes.value.json() : { tasks: [], overdue: 0 };
       const actData = actRes.status === 'fulfilled' && actRes.value.ok ? await actRes.value.json() : [];
+      const statsData = statsRes.status === 'fulfilled' && statsRes.value.ok ? await statsRes.value.json() : {};
 
       setData({
-        cbTasks: cbData.tasks || [],
-        rpkTasks: rpkData.tasks || [],
-        cbOverdue: cbData.overdue || 0,
-        rpkOverdue: rpkData.overdue || 0,
-        activities: actData.length > 0 ? actData : mockActivities,
+        activities: Array.isArray(actData) ? actData : [],
+        stats: {
+          messages24h: statsData.messages24h || 0,
+          actions24h: statsData.actions24h || 0,
+          totalActivities: statsData.totalActivities || 0,
+          dailyChart: statsData.dailyChart || [],
+        },
       });
     } catch (e) {
       console.error('Error fetching data:', e);
@@ -96,8 +92,12 @@ export default function Dashboard() {
     return <LoginScreen onLogin={() => setAuthenticated(true)} />;
   }
 
-  const totalTasks = data.cbTasks.length + data.rpkTasks.length;
-  const totalOverdue = data.cbOverdue + data.rpkOverdue;
+  // Format chart data
+  const chartData = data.stats.dailyChart.map((d: any) => ({
+    day: new Date(d.day).toLocaleDateString('pt-BR', { weekday: 'short' }),
+    messages: parseInt(d.messages || '0'),
+    actions: parseInt(d.actions || '0'),
+  }));
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
@@ -110,10 +110,9 @@ export default function Dashboard() {
             <div className="pl-10 lg:pl-0">
               <h2 className="text-lg font-bold">
                 {activeTab === 'overview' && 'Overview'}
-                {activeTab === 'tasks' && 'Tarefas ClickUp'}
-                {activeTab === 'activity' && 'Atividade Recente'}
-                {activeTab === 'instagram' && 'Instagram'}
-                {activeTab === 'calendar' && 'Calendário'}
+                {activeTab === 'activity' && 'Atividade do Bot'}
+                {activeTab === 'groups' && 'Grupos & Canais'}
+                {activeTab === 'integrations' && 'Integrações'}
                 {activeTab === 'settings' && 'Configurações'}
               </h2>
               <p className="text-xs text-gray-500">Atualizado em tempo real</p>
@@ -143,59 +142,40 @@ export default function Dashboard() {
               {/* Metric Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
-                  title="Tarefas Abertas"
-                  value={totalTasks || '—'}
-                  subtitle="CB + RPK"
-                  icon={CheckSquare}
-                  trend={`CB: ${data.cbTasks.length} | RPK: ${data.rpkTasks.length}`}
+                  title="Grupos Monitorados"
+                  value={6}
+                  subtitle="WhatsApp ativo"
+                  icon={Radio}
+                  trend="GPC, Wind, MBigucci, Exkalla, CB Exec, CB Mkt"
                   trendUp={true}
                 />
                 <MetricCard
-                  title="Tarefas Atrasadas"
-                  value={totalOverdue || 0}
-                  subtitle="Precisam de atenção"
-                  icon={AlertTriangle}
-                  highlight={totalOverdue > 0 ? 'red' : undefined}
-                />
-                <MetricCard
                   title="Mensagens (24h)"
-                  value="—"
-                  subtitle="WhatsApp"
+                  value={data.stats.messages24h || '—'}
+                  subtitle="Processadas pelo bot"
                   icon={MessageSquare}
+                  highlight="green"
                 />
                 <MetricCard
-                  title="Próximos Eventos"
-                  value="—"
-                  subtitle="Próximas 24h"
-                  icon={Calendar}
+                  title="Ações do Bot (24h)"
+                  value={data.stats.actions24h || '—'}
+                  subtitle="Carrosséis, checks, alertas"
+                  icon={Zap}
+                  highlight="orange"
+                />
+                <MetricCard
+                  title="Custo Mensal"
+                  value="~R$ 85"
+                  subtitle="APIs + Infra"
+                  icon={DollarSign}
+                  trend="Gemini, Neon, Vercel, Evolution"
                 />
               </div>
 
               {/* Chart + Activity */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ActivityChart />
+                <ActivityChart data={chartData.length > 0 ? chartData : undefined} />
                 <ActivityFeed activities={data.activities} />
-              </div>
-
-              {/* Tasks Preview */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <TaskList tasks={data.cbTasks} workspace="cb" loading={loading} />
-                <TaskList tasks={data.rpkTasks} workspace="rpk" loading={loading} />
-              </div>
-            </div>
-          )}
-
-          {/* TASKS TAB */}
-          {activeTab === 'tasks' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <MetricCard title="Total Abertas" value={totalTasks || '—'} icon={CheckSquare} />
-                <MetricCard title="Atrasadas" value={totalOverdue || 0} icon={AlertTriangle} highlight={totalOverdue > 0 ? 'red' : undefined} />
-                <MetricCard title="Concluídas Hoje" value="—" icon={CheckSquare} highlight="green" />
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <TaskList tasks={data.cbTasks} workspace="cb" loading={loading} />
-                <TaskList tasks={data.rpkTasks} workspace="rpk" loading={loading} />
               </div>
             </div>
           )}
@@ -203,45 +183,16 @@ export default function Dashboard() {
           {/* ACTIVITY TAB */}
           {activeTab === 'activity' && (
             <div className="space-y-6">
-              <ActivityChart />
-              <ActivityFeed activities={data.activities} maxItems={50} />
+              <ActivityChart data={chartData.length > 0 ? chartData : undefined} />
+              <ActivityFeed activities={data.activities} maxItems={100} />
             </div>
           )}
 
-          {/* INSTAGRAM TAB */}
-          {activeTab === 'instagram' && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {['Pessoal', 'Cultura Builder', 'RPK'].map((account) => (
-                  <div key={account} className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2.5 rounded-lg bg-pink-100 dark:bg-pink-900/30">
-                        <Instagram size={20} className="text-pink-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-sm">{account}</h3>
-                        <span className="text-xs text-gray-400">Conectar API</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-10 text-center">
-                <Instagram size={40} className="text-gray-300 mx-auto mb-3" />
-                <h3 className="font-semibold text-gray-600 dark:text-gray-400">Em breve</h3>
-                <p className="text-sm text-gray-400 mt-1">Métricas do Instagram serão integradas na próxima versão</p>
-              </div>
-            </div>
-          )}
+          {/* GROUPS TAB */}
+          {activeTab === 'groups' && <GroupsPanel />}
 
-          {/* CALENDAR TAB */}
-          {activeTab === 'calendar' && (
-            <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-10 text-center">
-              <Calendar size={40} className="text-gray-300 mx-auto mb-3" />
-              <h3 className="font-semibold text-gray-600 dark:text-gray-400">Em breve</h3>
-              <p className="text-sm text-gray-400 mt-1">Integração com Google Calendar na próxima versão</p>
-            </div>
-          )}
+          {/* INTEGRATIONS TAB */}
+          {activeTab === 'integrations' && <IntegrationsPanel />}
 
           {/* SETTINGS TAB */}
           {activeTab === 'settings' && (
@@ -254,16 +205,20 @@ export default function Dashboard() {
                     <span className="text-xs text-gray-400">A cada 60s</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                    <span className="text-sm">API de Atividades</span>
+                    <span className="text-xs text-green-500">POST /api/activities</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                    <span className="text-sm">Banco de Dados</span>
+                    <span className="text-xs text-green-500">Neon PostgreSQL</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800">
                     <span className="text-sm">ClickUp CB</span>
                     <span className="text-xs text-green-500">Conectado</span>
                   </div>
-                  <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center justify-between py-2">
                     <span className="text-sm">ClickUp RPK</span>
                     <span className="text-xs text-green-500">Conectado</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm">Banco de Dados</span>
-                    <span className="text-xs text-green-500">Neon PostgreSQL</span>
                   </div>
                 </div>
               </div>

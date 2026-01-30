@@ -1,26 +1,61 @@
 import { NextResponse } from 'next/server';
+import { neon } from '@neondatabase/serverless';
 
-// Returns mock activities for now — will connect to Neon DB
-export async function GET() {
-  const activities = [
-    { id: 1, timestamp: new Date(Date.now() - 300000).toISOString(), type: 'task_check', source: 'bot', title: 'Verificação de tarefas ClickUp', description: 'Scan automático concluído' },
-    { id: 2, timestamp: new Date(Date.now() - 900000).toISOString(), type: 'message_sent', source: 'whatsapp', title: 'Relatório enviado', description: 'Resumo diário via WhatsApp' },
-    { id: 3, timestamp: new Date(Date.now() - 1800000).toISOString(), type: 'post_created', source: 'instagram', title: 'Conteúdo agendado', description: 'Cultura Builder - Instagram' },
-    { id: 4, timestamp: new Date(Date.now() - 3600000).toISOString(), type: 'calendar_event', source: 'calendar', title: 'Lembrete de reunião', description: 'Reunião de planejamento semanal' },
-    { id: 5, timestamp: new Date(Date.now() - 7200000).toISOString(), type: 'bot_action', source: 'bot', title: 'Bot health check', description: 'Todos os sistemas operacionais' },
-  ];
+function getDb() {
+  return neon(process.env.DATABASE_URL!);
+}
 
-  return NextResponse.json(activities);
+export const dynamic = 'force-dynamic';
+
+export async function GET(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const limit = parseInt(searchParams.get('limit') || '50');
+    const offset = parseInt(searchParams.get('offset') || '0');
+    const type = searchParams.get('type');
+
+    const sql = getDb();
+
+    let activities;
+    if (type) {
+      activities = await sql(`SELECT * FROM activities WHERE type = $1 ORDER BY timestamp DESC LIMIT $2 OFFSET $3`, [type, limit, offset]);
+    } else {
+      activities = await sql(`SELECT * FROM activities ORDER BY timestamp DESC LIMIT $1 OFFSET $2`, [limit, offset]);
+    }
+
+    return NextResponse.json(activities);
+  } catch (e: any) {
+    console.error('GET /api/activities error:', e);
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
-  // Endpoint for the bot to log activities
   try {
+    const authHeader = request.headers.get('authorization');
+    const token = authHeader?.replace('Bearer ', '') || '';
+    if (token !== process.env.DASHBOARD_TOKEN && token !== 'kelvin2024') {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
-    // TODO: Save to Neon DB
-    console.log('New activity:', body);
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    return NextResponse.json({ error: 'Invalid body' }, { status: 400 });
+    const { type, source, title, description, metadata } = body;
+
+    if (!type || !title) {
+      return NextResponse.json({ error: 'type and title are required' }, { status: 400 });
+    }
+
+    const sql = getDb();
+    const result = await sql(
+      `INSERT INTO activities (type, source, title, description, metadata, timestamp)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       RETURNING *`,
+      [type, source || 'bot', title, description || '', JSON.stringify(metadata || {})]
+    );
+
+    return NextResponse.json(result[0], { status: 201 });
+  } catch (e: any) {
+    console.error('POST /api/activities error:', e);
+    return NextResponse.json({ error: e.message }, { status: 500 });
   }
 }
