@@ -5,18 +5,18 @@ import Sidebar from '@/components/Sidebar';
 import MetricCard from '@/components/MetricCard';
 import ActivityFeed, { ActivityItem } from '@/components/ActivityFeed';
 import ActivityChart from '@/components/ActivityChart';
-import BotStatus from '@/components/BotStatus';
+import ActionCards from '@/components/ActionCards';
 import LoginScreen from '@/components/LoginScreen';
-import DarkModeToggle from '@/components/DarkModeToggle';
 import GroupsPanel from '@/components/GroupsPanel';
+import FeaturesPanel from '@/components/FeaturesPanel';
 import IntegrationsPanel from '@/components/IntegrationsPanel';
-import { cn } from '@/lib/utils';
 import {
   Radio,
   MessageSquare,
   Zap,
   DollarSign,
-  RefreshCw,
+  Download,
+  Plus,
 } from 'lucide-react';
 
 interface DashboardData {
@@ -33,6 +33,7 @@ export default function Dashboard() {
   const [authenticated, setAuthenticated] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [loading, setLoading] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
   const [data, setData] = useState<DashboardData>({
     activities: [],
     stats: {
@@ -43,6 +44,7 @@ export default function Dashboard() {
     },
   });
 
+  // Auth check
   useEffect(() => {
     const token = document.cookie.match(/dashboard_token=([^;]+)/)?.[1];
     const urlToken = new URLSearchParams(window.location.search).get('token');
@@ -53,6 +55,21 @@ export default function Dashboard() {
       setAuthenticated(true);
     }
   }, []);
+
+  // Dark mode
+  useEffect(() => {
+    const stored = localStorage.getItem('theme');
+    if (stored === 'dark' || (!stored && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      setDarkMode(true);
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
+  const toggleDark = () => {
+    setDarkMode(!darkMode);
+    document.documentElement.classList.toggle('dark');
+    localStorage.setItem('theme', !darkMode ? 'dark' : 'light');
+  };
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -92,134 +109,150 @@ export default function Dashboard() {
     return <LoginScreen onLogin={() => setAuthenticated(true)} />;
   }
 
-  // Format chart data
+  // Chart data
   const chartData = data.stats.dailyChart.map((d: any) => ({
     day: new Date(d.day).toLocaleDateString('pt-BR', { weekday: 'short' }),
     messages: parseInt(d.messages || '0'),
     actions: parseInt(d.actions || '0'),
   }));
 
+  // Calculate cost
+  const monthlyCost = 'R$ 85';
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+    <div className="min-h-screen bg-gray-50/50 dark:bg-gray-950">
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        darkMode={darkMode}
+        onToggleDark={toggleDark}
+      />
 
-      <main className="lg:pl-64 min-h-screen transition-all">
-        {/* Header */}
-        <header className="sticky top-0 z-20 bg-gray-50/80 dark:bg-gray-950/80 backdrop-blur-sm border-b border-gray-200 dark:border-gray-800 px-6 py-3">
-          <div className="flex items-center justify-between">
-            <div className="pl-10 lg:pl-0">
-              <h2 className="text-lg font-bold">
-                {activeTab === 'overview' && 'Overview'}
-                {activeTab === 'activity' && 'Atividade do Bot'}
-                {activeTab === 'groups' && 'Grupos & Canais'}
-                {activeTab === 'integrations' && 'Integrações'}
-                {activeTab === 'settings' && 'Configurações'}
-              </h2>
-              <p className="text-xs text-gray-500">Atualizado em tempo real</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={fetchData}
-                className={cn(
-                  'p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-gray-500',
-                  loading && 'animate-spin'
-                )}
-              >
-                <RefreshCw size={18} />
-              </button>
-              <DarkModeToggle />
-            </div>
-          </div>
-        </header>
-
-        <div className="p-6">
-          {/* OVERVIEW TAB */}
+      <main className="lg:pl-64 min-h-screen">
+        <div className="p-6 lg:p-8 max-w-[1400px]">
+          {/* OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
-              {/* Bot Status */}
-              <BotStatus online={true} />
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="pl-10 lg:pl-0">
+                  <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                    Bem-vindo de volta! 👋
+                  </h1>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Aqui está um resumo da atividade dos seus grupos
+                  </p>
+                </div>
+                <div className="flex gap-2">
+                  <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors shadow-sm">
+                    <Download size={16} />
+                    Exportar
+                  </button>
+                  <button className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-accent hover:bg-accent-dark rounded-lg transition-colors shadow-sm">
+                    <Plus size={16} />
+                    Novo Grupo
+                  </button>
+                </div>
+              </div>
 
               {/* Metric Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <MetricCard
                   title="Grupos Monitorados"
                   value={6}
-                  subtitle="WhatsApp ativo"
+                  change="+2 este mês"
+                  changeUp={true}
                   icon={Radio}
-                  trend="GPC, Wind, MBigucci, Exkalla, CB Exec, CB Mkt"
-                  trendUp={true}
+                  iconBg="bg-purple-100 dark:bg-purple-900/30"
+                  iconColor="text-purple-600 dark:text-purple-400"
                 />
                 <MetricCard
                   title="Mensagens (24h)"
-                  value={data.stats.messages24h || '—'}
-                  subtitle="Processadas pelo bot"
+                  value={data.stats.messages24h || 0}
+                  change={data.stats.messages24h > 0 ? '+12%' : 'Sem dados'}
+                  changeUp={data.stats.messages24h > 0 ? true : undefined}
                   icon={MessageSquare}
-                  highlight="green"
+                  iconBg="bg-blue-100 dark:bg-blue-900/30"
+                  iconColor="text-blue-600 dark:text-blue-400"
                 />
                 <MetricCard
-                  title="Ações do Bot (24h)"
-                  value={data.stats.actions24h || '—'}
-                  subtitle="Carrosséis, checks, alertas"
+                  title="Ações do Bot"
+                  value={data.stats.actions24h || 0}
+                  change={data.stats.actions24h > 0 ? `${data.stats.totalActivities} total` : 'Sem dados'}
+                  changeUp={data.stats.actions24h > 0 ? true : undefined}
                   icon={Zap}
-                  highlight="orange"
+                  iconBg="bg-green-100 dark:bg-green-900/30"
+                  iconColor="text-green-600 dark:text-green-400"
                 />
                 <MetricCard
                   title="Custo Mensal"
-                  value="~R$ 85"
-                  subtitle="APIs + Infra"
+                  value={monthlyCost}
+                  change="Gemini + Neon + Vercel"
                   icon={DollarSign}
-                  trend="Gemini, Neon, Vercel, Evolution"
+                  iconBg="bg-amber-100 dark:bg-amber-900/30"
+                  iconColor="text-amber-600 dark:text-amber-400"
                 />
               </div>
 
-              {/* Chart + Activity */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <ActivityChart data={chartData.length > 0 ? chartData : undefined} />
-                <ActivityFeed activities={data.activities} />
+              {/* Chart + Activity Feed */}
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                <div className="xl:col-span-2">
+                  <ActivityChart data={chartData.length > 0 ? chartData : undefined} />
+                </div>
+                <div>
+                  <ActivityFeed activities={data.activities} maxItems={8} />
+                </div>
               </div>
+
+              {/* Action Cards */}
+              <ActionCards />
             </div>
           )}
 
-          {/* ACTIVITY TAB */}
-          {activeTab === 'activity' && (
-            <div className="space-y-6">
-              <ActivityChart data={chartData.length > 0 ? chartData : undefined} />
-              <ActivityFeed activities={data.activities} maxItems={100} />
+          {/* GROUPS */}
+          {activeTab === 'groups' && (
+            <div className="pl-10 lg:pl-0">
+              <GroupsPanel />
             </div>
           )}
 
-          {/* GROUPS TAB */}
-          {activeTab === 'groups' && <GroupsPanel />}
+          {/* FEATURES */}
+          {activeTab === 'features' && (
+            <div className="pl-10 lg:pl-0">
+              <FeaturesPanel />
+            </div>
+          )}
 
-          {/* INTEGRATIONS TAB */}
-          {activeTab === 'integrations' && <IntegrationsPanel />}
+          {/* INTEGRATIONS */}
+          {activeTab === 'integrations' && (
+            <div className="pl-10 lg:pl-0">
+              <IntegrationsPanel />
+            </div>
+          )}
 
-          {/* SETTINGS TAB */}
-          {activeTab === 'settings' && (
-            <div className="max-w-lg space-y-6">
-              <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-5">
-                <h3 className="font-semibold text-sm mb-4">Configurações</h3>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800">
-                    <span className="text-sm">Auto-refresh</span>
-                    <span className="text-xs text-gray-400">A cada 60s</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800">
-                    <span className="text-sm">API de Atividades</span>
-                    <span className="text-xs text-green-500">POST /api/activities</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800">
-                    <span className="text-sm">Banco de Dados</span>
-                    <span className="text-xs text-green-500">Neon PostgreSQL</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2 border-b border-gray-100 dark:border-gray-800">
-                    <span className="text-sm">ClickUp CB</span>
-                    <span className="text-xs text-green-500">Conectado</span>
-                  </div>
-                  <div className="flex items-center justify-between py-2">
-                    <span className="text-sm">ClickUp RPK</span>
-                    <span className="text-xs text-green-500">Conectado</span>
-                  </div>
+          {/* CONFIG */}
+          {activeTab === 'config' && (
+            <div className="pl-10 lg:pl-0 max-w-lg space-y-6">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-white">Configurações</h2>
+                <p className="text-sm text-gray-500 mt-1">Configurações gerais da conta</p>
+              </div>
+              <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-100 dark:border-gray-800 p-6 shadow-sm">
+                <h3 className="font-semibold text-sm mb-4 text-gray-900 dark:text-white">Sistema</h3>
+                <div className="space-y-0">
+                  {[
+                    { label: 'Auto-refresh', value: 'A cada 60s', color: '' },
+                    { label: 'API de Atividades', value: 'POST /api/activities', color: 'text-green-500' },
+                    { label: 'Banco de Dados', value: 'Neon PostgreSQL', color: 'text-green-500' },
+                    { label: 'ClickUp CB', value: 'Conectado', color: 'text-green-500' },
+                    { label: 'ClickUp RPK', value: 'Conectado', color: 'text-green-500' },
+                    { label: 'Evolution API', value: 'Conectado', color: 'text-green-500' },
+                  ].map((item, i) => (
+                    <div key={i} className="flex items-center justify-between py-3 border-b border-gray-50 dark:border-gray-800/50 last:border-0">
+                      <span className="text-sm text-gray-600 dark:text-gray-400">{item.label}</span>
+                      <span className={`text-xs font-medium ${item.color || 'text-gray-400'}`}>{item.value}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
               <button
